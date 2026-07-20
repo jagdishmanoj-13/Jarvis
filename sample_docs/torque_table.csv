@@ -1,0 +1,4 @@
+bolt_size,torque_nm,material
+M6,12,steel
+M8,25,steel
+M10,45,steel
