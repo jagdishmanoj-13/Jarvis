@@ -1,0 +1,46 @@
+# requirements.txt
+# =================
+# Every dependency here is a pure-Python or lightweight, no-native-binary
+# package chosen specifically because it installs on a locked-down,
+# offline/limited-permission Citrix Windows environment without requiring
+# admin rights, a compiler, or internet access at RUNTIME (only at initial
+# install time, ideally from an internal PyPI mirror or offline wheel cache).
+#
+# Phase 1 (foundations): stdlib only, no entries needed.
+#
+# Phase 2 (document parsing):
+pypdf==5.9.0            # PDF text/metadata extraction, pure Python
+python-docx==1.2.0       # .docx parsing
+python-pptx==1.0.2       # .pptx parsing
+openpyxl==3.1.5          # .xlsx / modern .xls parsing
+beautifulsoup4==4.14.3    # HTML parsing (used with stdlib html.parser backend, no lxml required)
+PyYAML==6.0.3             # YAML config parsing
+chardet==7.4.0.post2      # encoding detection for legacy text files from Windows tools
+
+# Optional, NOT required (registry degrades gracefully without them):
+# striprtf            -> improves RTF extraction beyond the built-in stripper
+# xlrd                -> enables true legacy .xls (pre-2007 binary) support
+# langdetect          -> enables real language detection instead of the
+#                        lightweight heuristic
+
+# Phase 3 (OCR + scanned document support):
+pytesseract==0.3.13       # Python wrapper around the tesseract binary (see NOTE below)
+pdf2image==1.17.0         # renders PDF pages to images for OCR-ing scanned pages
+Pillow>=10.0.0            # image handling, required by pytesseract/pdf2image
+#
+# NOTE (Citrix): pytesseract/pdf2image are thin Python wrappers -- they
+# require the actual `tesseract` and `poppler` (for pdftoppm) binaries to
+# be present on PATH. These are NOT pip packages. If this machine doesn't
+# already have them:
+#   - tesseract: https://github.com/UB-Mannheim/tesseract/wiki (Windows installer,
+#     no admin rights needed if installed to a user-writable directory)
+#   - poppler for Windows: https://github.com/oschwartz10612/poppler-windows
+# If neither is present, JARVIS still runs fine -- OCR-dependent formats
+# (scanned PDFs, image files) are automatically marked unavailable with a
+# clear message instead of failing indexing for everything else.
+
+# Phase 7 (UI) — MVP wired early so Phases 1-2 have a real, clickable front end:
+streamlit==1.38.0        # UI framework; pure Python, no native compilation step needed
+
+# Phase 4+ (to be added as those layers are built):
+# faiss-cpu OR a pure-python fallback -> vector store (pluggable interface)
