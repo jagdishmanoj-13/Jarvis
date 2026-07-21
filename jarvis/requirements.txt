@@ -39,8 +39,12 @@ Pillow>=10.0.0            # image handling, required by pytesseract/pdf2image
 # (scanned PDFs, image files) are automatically marked unavailable with a
 # clear message instead of failing indexing for everything else.
 
+# Phase 5-6 (reasoning + non-LLM language generation):
+sympy==1.14.0             # symbolic math library (arithmetic, unit conversion, table stats) -- NOT an LLM
+
 # Phase 7 (UI) — MVP wired early so Phases 1-2 have a real, clickable front end:
 streamlit==1.38.0        # UI framework; pure Python, no native compilation step needed
+psutil==7.2.2             # optional: powers the sidebar CPU/RAM system monitor (UI degrades gracefully without it)
 
 # Phase 4+ (to be added as those layers are built):
 # faiss-cpu OR a pure-python fallback -> vector store (pluggable interface)

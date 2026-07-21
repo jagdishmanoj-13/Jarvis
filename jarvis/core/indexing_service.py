@@ -41,6 +41,12 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+_SEARCH_STOPWORDS = {
+    "what", "is", "are", "the", "a", "an", "was", "were", "do", "does", "did",
+    "how", "why", "when", "where", "which", "who", "and", "or", "of", "for",
+    "to", "in", "on", "at", "about", "this", "that", "it", "with", "i",
+}
+
 
 @dataclass
 class IndexingStats:
@@ -220,8 +226,22 @@ def search_chunks(store: MetadataStore, query: str, limit: int = 8) -> List[dict
     # in the exact same chunk (see the "required PPE gloves" gap noted in
     # the Phase 2 demo — full ranking/merging is still Phase 4's job, this
     # is a pragmatic improvement in the meantime).
-    terms = [t for t in query.replace('"', " ").split() if t]
-    fts_query = " OR ".join(terms) if terms else query
+    # Terms are extracted with a strict alnum(+hyphen) regex, NOT a plain
+    # .split(), because FTS5's query syntax treats characters like ? * ( )
+    # " as operators/syntax -- a raw "?" from a question like "What is
+    # torque?" otherwise causes a hard `fts5: syntax error` and the search
+    # silently returns nothing.
+    # Common stopwords are dropped before OR-joining: without this, a
+    # question like "What is the meaning of life?" matches almost any
+    # document purely on "what"/"is"/"the"/"of" and returns irrelevant
+    # noise instead of correctly finding nothing.
+    import re
+    all_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-]*", query)
+    content_terms = [t for t in all_terms if t.lower() not in _SEARCH_STOPWORDS]
+    terms = content_terms or all_terms  # fall back to everything if the query was ALL stopwords
+    fts_query = " OR ".join(terms) if terms else None
+    if not fts_query:
+        return []
 
     try:
         with store._connect() as conn:

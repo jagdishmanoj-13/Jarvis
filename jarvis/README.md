@@ -20,49 +20,74 @@ touching anything else.
 |---|---|---|
 | 1 | `config/`, `utils/`, `models/`, `database/`, `cache/` — foundations | ✅ Done |
 | 2 | `parser/` — file parsing for every supported format + chunking | ✅ Done |
-| 2.5 | `core/indexing_service.py` + `ui/app.py` — minimal working UI (MVP, ahead of schedule) | ✅ Done |
 | 3 | `ocr/`, `core/archive_service.py`, `core/background_indexer.py` — OCR, ZIP expansion, non-blocking threaded indexing | ✅ Done |
-| 4 | `retrieval/` — real hybrid keyword/fuzzy/metadata/table search + ranking | ⏳ Next |
-| 5 | `reasoning/`, `memory/` — intent detection, context, conversation memory | ⏳ Planned |
-| 6 | `language/` — pluggable LanguageGenerationEngine interface | ⏳ Planned |
-| 7 | `ui/` — full premium glassmorphic redesign on top of the same backend calls | ⏳ Planned |
+| 4 | `retrieval/hybrid_search.py` — real hybrid keyword + fuzzy + synonym + metadata search with ranking | ✅ Done |
+| 5 | `reasoning/intent_detector.py`, `memory/context_manager.py` — rule-based intent + follow-up context | ✅ Done |
+| 6 | `language/` — non-LLM LanguageGenerationEngine (grammar + communication + math) | ✅ Done |
+| 7 | `ui/` — full premium glassmorphic UI (theme, particles, progress rings, document map, favorites) | ✅ Done |
 
-## What Phase 3 added
-- **OCR** (`ocr/ocr_engine.py`): pluggable interface, Tesseract-backed by
-  default. Standalone images (`.png/.jpg/.tif/.bmp`) are OCR'd via
-  `parser/image_parser.py`. Scanned PDF pages are detected automatically
-  (`parser/pdf_parser.py` flags any page with suspiciously little
-  extractable text) and OCR'd page-by-page, so a PDF with a mix of real
-  text pages and scanned pages gets the right treatment for each page.
-  If `tesseract`/`poppler` aren't installed on a given machine, OCR-
-  dependent formats degrade to a clear "unavailable" message instead of
-  breaking the rest of indexing.
-- **ZIP archives** (`core/archive_service.py`): expanded into a content-
-  hash-keyed cache directory (so re-scanning an unchanged zip costs
-  nothing) and their contents indexed under an isolated virtual-folder
-  key, so archive contents can never be confused with, or accidentally
-  cause deletion of, real sibling files. Includes zip-slip path-traversal
-  protection and a zip-bomb size cap — both verified against real
-  malicious-archive test cases, not just described.
-- **Non-blocking background indexing** (`core/background_indexer.py`):
-  `index_folder()` now runs on a daemon thread with thread-safe progress
-  you can poll; the Streamlit UI polls it every second so a large folder
-  scan no longer freezes the browser tab.
+**All 7 phases are implemented and integration-tested together** — see
+"Full-system regression" below. Every module was tested individually as it
+was built, then re-verified as part of the complete pipeline before being
+called done.
+
+## What Phase 4 added: real hybrid search, not just keyword matching
+`retrieval/hybrid_search.py` layers four independent signals, each
+separately testable, then merges and ranks them:
+- **Keyword** — SQLite FTS5, stopword-filtered, OR-matched for recall.
+- **Synonym** — expands query terms via the bundled domain lexicon
+  (`language/lexicon.py`: "bolt" ↔ "fastener", etc.) with a second, lower-
+  weighted search pass.
+- **Fuzzy** — typo-tolerant matching via `difflib` (stdlib) against a
+  cached corpus vocabulary, so "torqe" still finds "torque" content.
+- **Metadata** — a query term matching a filename boosts that whole
+  document's chunks (asking about "torque_spec" surfaces torque_spec.docx
+  even if that exact phrase never appears inside the file).
+
+All four are combined by a ranking function that also boosts table-element
+chunks for numeric/spec-sounding queries, since tables are what actually
+answer those. Verified with real typo and synonym queries, not just
+described — see the development history for test transcripts.
+
+## What Phase 7 added: the actual premium UI
+`ui/theme.py` (glassmorphic dark/light CSS + animated particle background,
+injected via one stylesheet driven by CSS variables) and
+`ui/visualizations.py` (a real, data-driven progress ring and document
+knowledge map, rendered as generated SVG — deliberately built on pure
+Python + `math`, not `matplotlib`/`networkx`/`plotly`, to keep the
+dependency footprint Citrix-light) sit on top of the unchanged Phase 1-6
+backend. Also added: a dark/light theme toggle, a system resource monitor
+(CPU/RAM via `psutil`, gracefully hidden if unavailable), word-by-word
+"typing" reveal of composed answers, and a favorites/bookmarks panel — all
+persisted via `MetadataStore` so they survive a restart.
+
+## Full-system regression
+Every phase was re-verified together, not just individually, before this
+was called complete: full folder index (all parsers + OCR + ZIP +
+background threading) → incremental re-index (confirms nothing
+unnecessarily re-parsed) → 9 real questions spanning every intent type
+(definition, calculation, unit conversion, table statistics, follow-up,
+list, comparison, no-match, and a deliberate typo) → SVG visualization
+validity against live data → full UI module import with every real
+dependency wired in. All passed.
 
 ## Running it (Windows)
-Double-click **`Start_JARVIS.bat`**. First run creates a private `.venv`
-folder (no admin rights needed) and installs `requirements.txt`; every run
-after that is fast. It launches the Streamlit UI at `http://localhost:8501`
-in your default browser. See the OFFLINE INSTALL note inside the `.bat`
-file if this machine has no internet access for the one-time package
-install.
+See **`HOW_TO_RUN.txt`** at the top of this package for copy-paste
+commands. (There's no double-click `.bat` launcher bundled here on
+purpose — email attachment scanners, including Gmail's, block or strip
+zip files containing script files like `.bat`, even renamed ones, because
+they inspect file content rather than just the extension. `HOW_TO_RUN.txt`
+also shows how to create your own local double-click shortcut in 30
+seconds once you have it running, since a file you type yourself never
+touches an email scanner.)
 
 **What actually works right now:** point it at a folder, it indexes every
-supported file, and you can ask keyword-style questions and get the best-
-matching passage back with a file+page/section citation. There is no
-language-generation model summarizing/rephrasing answers yet — that's
-Phase 6, by design (see the top of this file). Search is FTS5 keyword
-matching, not the full hybrid/fuzzy/synonym engine — that's Phase 4.
+supported file (including OCR for scanned pages/images and ZIP archives),
+and you can ask keyword-style questions and get the best-matching passage
+back with a file+page/section citation. There is no language-generation
+model summarizing/rephrasing answers yet — that's Phase 6, by design (see
+the top of this file). Search is FTS5 keyword matching, not the full
+hybrid/fuzzy/synonym engine — that's Phase 4.
 
 ## Running it (any OS, dev/testing)
 
